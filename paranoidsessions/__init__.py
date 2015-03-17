@@ -144,43 +144,43 @@ being terminated.  Consider some of the following adjustments:
 
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 import time
 
 from django.utils.http import cookie_date
-from django.utils.hashcompat import md5_constructor
+from hashlib import md5
 from django.core.urlresolvers import get_callable
-from django.contrib.sessions.backends.base import randrange
+from random import randrange
 from django.conf import settings
 
-MAX_NONCE_SEED = 18446744073709551616L     # 2 << 63
+MAX_NONCE_SEED = 18446744073709551616L  # 2 << 63
 
-if not hasattr(settings,"PSESSION_CHECK_HEADERS"):
-    check_headers = ("REMOTE_ADDR","HTTP_X_FORWARDED_FOR","HTTP_USER_AGENT",)
+if not hasattr(settings, "PSESSION_CHECK_HEADERS"):
+    check_headers = ("REMOTE_ADDR", "HTTP_X_FORWARDED_FOR", "HTTP_USER_AGENT",)
     settings.PSESSION_CHECK_HEADERS = check_headers
-if not hasattr(settings,"PSESSION_NONCE_TIMEOUT"):
+if not hasattr(settings, "PSESSION_NONCE_TIMEOUT"):
     settings.PSESSION_NONCE_TIMEOUT = 1
-if not hasattr(settings,"PSESSION_NONCE_WINDOW"):
+if not hasattr(settings, "PSESSION_NONCE_WINDOW"):
     settings.PSESSION_NONCE_WINDOW = 1
-if not hasattr(settings,"PSESSION_NONCE_WINDOW_TIMEOUT"):
+if not hasattr(settings, "PSESSION_NONCE_WINDOW_TIMEOUT"):
     settings.PSESSION_NONCE_WINDOW_TIMEOUT = 1
-if not hasattr(settings,"PSESSION_KEY_TIMEOUT"):
+if not hasattr(settings, "PSESSION_KEY_TIMEOUT"):
     settings.PSESSION_KEY_TIMEOUT = None
-if not hasattr(settings,"PSESSION_SESSION_KEY"):
+if not hasattr(settings, "PSESSION_SESSION_KEY"):
     settings.PSESSION_SESSION_KEY = "PARANOID_SESSION_DATA"
-if not hasattr(settings,"PSESSION_COOKIE_NAME"):
+if not hasattr(settings, "PSESSION_COOKIE_NAME"):
     settings.PSESSION_COOKIE_NAME = "sessionnonce"
-if not hasattr(settings,"PSESSION_SECURE_COOKIE_NAME"):
+if not hasattr(settings, "PSESSION_SECURE_COOKIE_NAME"):
     settings.PSESSION_SECURE_COOKIE_NAME = "sessionid_https"
-if not hasattr(settings,"PSESSION_COOKIE_HTTPONLY"):
+if not hasattr(settings, "PSESSION_COOKIE_HTTPONLY"):
     settings.PSESSION_COOKIE_HTTPONLY = True
-if hasattr(settings,"PSESSION_REQUEST_FILTER_FUNCTION"):
+if hasattr(settings, "PSESSION_REQUEST_FILTER_FUNCTION"):
     request_filter = get_callable(settings.PSESSION_REQUEST_FILTER_FUNCTION)
     settings.PSESSION_REQUEST_FILTER_FUNCTION = request_filter
 else:
     settings.PSESSION_REQUEST_FILTER_FUNCTION = lambda req: True
-if hasattr(settings,"PSESSION_CLEAR_SESSION_FUNCTION"):
+if hasattr(settings, "PSESSION_CLEAR_SESSION_FUNCTION"):
     clear_session = get_callable(settings.PSESSION_CLEAR_SESSION_FUNCTION)
     settings.PSESSION_CLEAR_SESSION_FUNCTION = clear_session
 else:
@@ -203,23 +203,22 @@ class NonceStream(object):
     """
 
     def __init__(self):
-        seed = (randrange(0,MAX_NONCE_SEED),settings.SECRET_KEY)
-        self.state = md5_constructor("%s%s" % seed).hexdigest()
+        seed = (randrange(0, MAX_NONCE_SEED), settings.SECRET_KEY)
+        self.state = md5("%s%s" % seed).hexdigest()
 
     def nonces(self):
         """Generator producing sequence of nonce values."""
         state = self.state
         while True:
             yield state
-            state = md5_constructor(state + settings.SECRET_KEY).hexdigest()
+            state = md5(state + settings.SECRET_KEY).hexdigest()
 
     def increment(self):
         """Increment the nonce stream, discarding initial nonce."""
         state = self.state
-        state = self.state
-        self.state = md5_constructor(state + settings.SECRET_KEY).hexdigest()
+        self.state = md5(state + settings.SECRET_KEY).hexdigest()
         return self.state
-        
+
 
 class SessionFingerprint(object):
     """Object representing a unique request fingerprint for a session.
@@ -234,7 +233,7 @@ class SessionFingerprint(object):
     It also maintains ancilliarly data for managing timeouts etc.
     """
 
-    def __init__(self,request):
+    def __init__(self, request):
         self.hash = self.request_hash(request)
         self.nonce_stream = NonceStream()
         now = time.time()
@@ -243,7 +242,7 @@ class SessionFingerprint(object):
         self.last_request_time = now
         self.secure_key = None
 
-    def check_request(self,request):
+    def check_request(self, request):
         """Check that the given request is valid for this session.
 
         It's valid if its fingerprint hash matches the current hash, or
@@ -252,25 +251,25 @@ class SessionFingerprint(object):
         """
         if request.is_secure():
             if self.secure_key is None:
-                seed = (randrange(0,MAX_NONCE_SEED),settings.SECRET_KEY)
-                self.secure_key = md5_constructor("%s%s" % seed).hexdigest()
+                seed = (randrange(0, MAX_NONCE_SEED), settings.SECRET_KEY)
+                self.secure_key = md5("%s%s" % seed).hexdigest()
                 request.session.modified = True
             else:
                 cookie_name = settings.PSESSION_SECURE_COOKIE_NAME
-                key = request.COOKIES.get(cookie_name,"")
+                key = request.COOKIES.get(cookie_name, "")
                 if key != self.secure_key:
                     return False
-        hash = self.request_hash(request)
-        if hash != self.hash:
+        _hash = self.request_hash(request)
+        if _hash != self.hash:
             return False
         if settings.PSESSION_NONCE_TIMEOUT is not None:
-            nonce = request.COOKIES.get(settings.PSESSION_COOKIE_NAME,"")
+            nonce = request.COOKIES.get(settings.PSESSION_COOKIE_NAME, "")
             if nonce not in self.get_valid_nonces():
                 return False
         self.last_request_time = time.time()
         return True
 
-    def process_response(self,request,response):
+    def process_response(self, request, response):
         """Process a response and mark session as modified if necessary.
 
         This method sets the nonce cookie and cycles the session key if
@@ -279,7 +278,7 @@ class SessionFingerprint(object):
         """
         now = time.time()
         nonce_timeout = settings.PSESSION_NONCE_TIMEOUT
-        #  Generate a new nonce if necessary
+        # Generate a new nonce if necessary
         if nonce_timeout is not None:
             #  If this request took an unusually long time, other requests
             #  might have incremented the nonce more than once.  We need to
@@ -288,7 +287,7 @@ class SessionFingerprint(object):
                 self.refresh_from_session(request)
             if self.last_nonce_time + nonce_timeout < now:
                 self.nonce_stream.increment()
-                self.set_nonce_cookie(request,response)
+                self.set_nonce_cookie(request, response)
                 self.last_nonce_time = now
                 request.session.modified = True
         #  Generate a new session key if necessary
@@ -302,27 +301,27 @@ class SessionFingerprint(object):
         #  valid requests!
         if request.is_secure():
             cookie_name = settings.PSESSION_SECURE_COOKIE_NAME
-            if self.secure_key != request.COOKIES.get(cookie_name,""):
-                self.set_secure_key_cookie(request,response)
+            if self.secure_key != request.COOKIES.get(cookie_name, ""):
+                self.set_secure_key_cookie(request, response)
         #  Force the session cookie to be HttpOnly.
         #  This works even though we get called before the session cookie is
         #  sent; fortunately SimpleCookie remembers individual settings even
         #  if you re-assign the cookie.
         if request.session.modified or settings.SESSION_SAVE_EVERY_REQUEST:
             key = request.session.session_key
-            self._set_cookie(request,response,settings.SESSION_COOKIE_NAME,key)
-            
-    def request_hash(self,request):
+            self._set_cookie(request, response, settings.SESSION_COOKIE_NAME, key)
+
+    def request_hash(self, request):
         """Create a hash of the given request's fingerprint data.
 
         This hash will contain data that should be the same for every request
         in this session.
         """
-        hash = md5_constructor()
+        _hash = md5()
         if settings.PSESSION_CHECK_HEADERS:
             for header in settings.PSESSION_CHECK_HEADERS:
-               hash.update(request.META.get(header,""))
-        return hash.digest()
+                _hash.update(request.META.get(header, ""))
+        return _hash.hexdigest()
 
     def get_valid_nonces(self):
         """Get a sequence of all currently valid nonces."""
@@ -330,7 +329,7 @@ class SessionFingerprint(object):
         nonces = self.nonce_stream.nonces()
         window = settings.PSESSION_NONCE_WINDOW
         timeout = settings.PSESSION_NONCE_WINDOW_TIMEOUT
-        #  Yield or skip old nonces, depending on window timeout
+        # Yield or skip old nonces, depending on window timeout
         if timeout is None or now < self.last_nonce_time + timeout:
             for _ in xrange(window):
                 yield nonces.next()
@@ -344,17 +343,17 @@ class SessionFingerprint(object):
         #  but it could happen.
         yield nonces.next()
 
-    def set_nonce_cookie(self,request,response):
+    def set_nonce_cookie(self, request, response):
         """Set the nonce cookie on the given response."""
         nonce = list(self.get_valid_nonces())[-2]
-        self._set_cookie(request,response,settings.PSESSION_COOKIE_NAME,nonce)
+        self._set_cookie(request, response, settings.PSESSION_COOKIE_NAME, nonce)
 
-    def set_secure_key_cookie(self,request,response):
+    def set_secure_key_cookie(self, request, response):
         """Set the secure-key cookie on the given response."""
         name = settings.PSESSION_SECURE_COOKIE_NAME
-        self._set_cookie(request,response,name,self.secure_key,True)
+        self._set_cookie(request, response, name, self.secure_key, True)
 
-    def _set_cookie(self,request,response,name,value,secure=False):
+    def _set_cookie(self, request, response, name, value, secure=False):
         """Set a session-related cookie.
 
         This duplicates the cookie-setting logic in the session middleware,
@@ -368,19 +367,26 @@ class SessionFingerprint(object):
             max_age = request.session.get_expiry_age()
             expires_time = time.time() + max_age
             expires = cookie_date(expires_time)
-        response.set_cookie(name,value,secure=secure,
-                            max_age=max_age,expires=expires,
+        response.set_cookie(name, value, secure=secure,
+                            max_age=max_age, expires=expires,
                             domain=settings.SESSION_COOKIE_DOMAIN,
                             path=settings.SESSION_COOKIE_PATH)
         if settings.PSESSION_COOKIE_HTTPONLY:
             if "httponly" in response.cookies[name]:
                 response.cookies[name]["httponly"] = True
 
-    def refresh_from_session(self,request):
+    def refresh_from_session(self, request):
         """Refresh internal data from the session store."""
         session_data = request.session.load()
         try:
-            fingerprint = session_data[settings.PSESSION_SESSION_KEY]
+            data = session_data[settings.PSESSION_SESSION_KEY]
+            nonce_stream = data.pop('nonce_stream')
+            fingerprint = SessionFingerprint(request)
+            for key, value in data.items():
+                setattr(fingerprint, key, value)
+            fingerprint.nonce_stream = NonceStream()
+            fingerprint.nonce_stream.state = nonce_stream
+            # fingerprint = session_data[settings.PSESSION_SESSION_KEY]
         except KeyError:
             pass
         else:
@@ -391,7 +397,7 @@ class SessionFingerprint(object):
                 self.last_key_time = fingerprint.last_key_time
             if fingerprint.last_request_time > self.last_request_time:
                 self.last_request_time = fingerprint.last_request_time
-        
+
 
 class ParanoidSessionMiddleware(object):
     """Middleware implementing paranoid session checking.
@@ -400,13 +406,20 @@ class ParanoidSessionMiddleware(object):
     object, and asks that object to validate each incoming request.
     """
 
-    def process_request(self,request):
+    def process_request(self, request):
         if settings.PSESSION_REQUEST_FILTER_FUNCTION(request):
             try:
-                fingerprint = request.session[settings.PSESSION_SESSION_KEY]
+                data = request.session[settings.PSESSION_SESSION_KEY]
+                nonce_stream = data.pop('nonce_stream')
+                fingerprint = SessionFingerprint(request)
+                for key, value in data.items():
+                    setattr(fingerprint, key, value)
+                # fingerprint = request.session[settings.PSESSION_SESSION_KEY]
             except KeyError:
                 fingerprint = SessionFingerprint(request)
-                request.session[settings.PSESSION_SESSION_KEY] = fingerprint
+                data = fingerprint.__dict__
+                data['nonce_stream'] = data['nonce_stream'].state
+                request.session[settings.PSESSION_SESSION_KEY] = data
                 request.session.save()
             else:
                 if not fingerprint.check_request(request):
@@ -415,16 +428,23 @@ class ParanoidSessionMiddleware(object):
         else:
             request.session.paranoid = False
 
-    def process_response(self,request,response):
-        if not hasattr(request,"session"):
+    def process_response(self, request, response):
+        if not hasattr(request, "session"):
             return response
-        if getattr(request.session,"paranoid",True):
+        if getattr(request.session, "paranoid", True):
             try:
-                fingerprint = request.session[settings.PSESSION_SESSION_KEY]
+                data = request.session[settings.PSESSION_SESSION_KEY]
+                nonce_stream = data.pop('nonce_stream')
+                fingerprint = SessionFingerprint(request)
+                for key, value in data.items():
+                    setattr(fingerprint, key, value)
+                fingerprint.nonce_stream = NonceStream()
+                fingerprint.nonce_stream.state = nonce_stream
+                # fingerprint = request.session[settings.PSESSION_SESSION_KEY]
             except KeyError:
                 fingerprint = SessionFingerprint(request)
-                request.session[settings.PSESSION_SESSION_KEY] = fingerprint
-            fingerprint.process_response(request,response)
+                data = fingerprint.__dict__
+                data['nonce_stream'] = data['nonce_stream'].state
+                request.session[settings.PSESSION_SESSION_KEY] = data
+            fingerprint.process_response(request, response)
         return response
-
-
