@@ -144,7 +144,7 @@ being terminated.  Consider some of the following adjustments:
 
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 import time
 
@@ -417,7 +417,7 @@ class ParanoidSessionMiddleware(object):
                 # fingerprint = request.session[settings.PSESSION_SESSION_KEY]
             except KeyError:
                 fingerprint = SessionFingerprint(request)
-                data = fingerprint.__dict__
+                data = fingerprint.__dict__.copy()
                 data['nonce_stream'] = data['nonce_stream'].state
                 request.session[settings.PSESSION_SESSION_KEY] = data
                 request.session.save()
@@ -443,7 +443,7 @@ class ParanoidSessionMiddleware(object):
                 # fingerprint = request.session[settings.PSESSION_SESSION_KEY]
             except KeyError:
                 fingerprint = SessionFingerprint(request)
-                data = fingerprint.__dict__
+                data = fingerprint.__dict__.copy()
                 data['nonce_stream'] = data['nonce_stream'].state
                 request.session[settings.PSESSION_SESSION_KEY] = data
             fingerprint.process_response(request, response)
